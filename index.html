@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		
+		<title>One Password</title>
+		
+		<style>
+			.error { font-weight: bold; color: #F00; }
+		</style>
+		
+		<script src="lib/json2.js"> </script>
+
+		<link rel="stylesheet" href="lib/jquery.mobile-1.3.0.min.css" />
+		<script src="lib/jquery-1.8.2.min.js"></script>
+		<script src="lib/jquery.mobile-1.3.0.min.js"></script>
+		
+		<script>
+			var csvRows = []; var objArr = [];
+			var benchmarkStart, benchmarkParseEnd, benchmarkObjEnd, benchmarkJsonEnd, benchmarkPopulateEnd;
+			
+			function setMessage (message, error)
+			{
+				document.getElementById("message").innerHTML = '<p>' + message + '</p>';
+				
+				if (error)
+					document.getElementById("message").className = "error";
+				else
+					document.getElementById("message").className = "";
+			}
+			
+			function parseCSVLine (line)
+			{
+
+				arr = line.split('[atob]');
+				for(var x in arr){
+					miniarr = arr[x].split('[/atob]');
+					if(miniarr.length>1){
+						miniarr[0] = atob(miniarr[0]);	
+						arr[x] = miniarr.join('');
+					}
+				}
+				line = arr.join('');
+
+				line = line.split(',');
+				
+				// check for splits performed inside quoted strings and correct if needed
+				for (var i = 0; i < line.length; i++)
+				{
+					var chunk = line[i].replace(/^[\s]*|[\s]*$/g, "");
+					var quote = "";
+					if (chunk.charAt(0) == '"' || chunk.charAt(0) == "'") quote = chunk.charAt(0);
+					if (quote != "" && chunk.charAt(chunk.length - 1) == quote) quote = "";
+					
+					if (quote != "")
+					{
+						var j = i + 1;
+						
+						if (j < line.length) chunk = line[j].replace(/^[\s]*|[\s]*$/g, "");
+						
+						while (j < line.length && chunk.charAt(chunk.length - 1) != quote)
+						{
+							line[i] += ',' + line[j];
+							line.splice(j, 1);
+							chunk = line[j].replace(/[\s]*$/g, "");
+						}
+						
+						if (j < line.length)
+						{
+							line[i] += ',' + line[j];
+							line.splice(j, 1);
+						}
+					}
+				}
+				
+				for (var i = 0; i < line.length; i++)
+				{
+					// remove leading/trailing whitespace
+					line[i] = line[i].replace(/^[\s]*|[\s]*$/g, "");
+					
+					// remove leading/trailing quotes
+					if (line[i].charAt(0) == '"') line[i] = line[i].replace(/^"|"$/g, "");
+					else if (line[i].charAt(0) == "'") line[i] = line[i].replace(/^'|'$/g, "");
+				}
+				
+				return line;
+			}
+			
+			function csvToJson (cual)
+			{
+				var message = "";
+				var error = false;
+				var f = document.forms["convertForm"];
+				var csvText = f.elements[cual].value;
+				var jsonText = "";
+				
+				setMessage(message, error);
+				
+				if (csvText == "") { error = true; message = "Enter CSV text below."; }
+				
+				if (!error)
+				{
+					benchmarkStart = new Date();
+					
+					csvText = csvText.replace(/"([^"]+)"/g, "[btoa]$1[/btoa]" );
+					
+					arr = csvText.split('[btoa]');
+					for(var x in arr){
+						miniarr = arr[x].split('[/btoa]');
+						if(miniarr.length>1){
+							miniarr[0] = btoa(miniarr[0]);	
+							arr[x] = miniarr.join('[/atob]');
+						}
+					}
+					csvText = arr.join('[atob]');
+					
+
+					csvRows = csvText.split(/[\r\n]/g); // split into rows
+					
+					// get rid of empty rows
+					for (var i = 0; i < csvRows.length; i++)
+					{
+						if (csvRows[i].replace(/^[\s]*|[\s]*$/g, '') == "")
+						{
+							csvRows.splice(i, 1);
+							i--;
+						}
+					}
+					
+					if (csvRows.length < 2) { error = true; message = "El CSV no es correcto"; }
+					else
+					{
+						objArr = [];
+						
+						for (var i = 0; i < csvRows.length; i++)
+						{
+							csvRows[i] = parseCSVLine(csvRows[i]);
+						}
+						
+						benchmarkParseEnd = new Date();
+						
+						for (var i = 1; i < csvRows.length; i++)
+						{
+							if (csvRows[i].length > 0) objArr.push({});
+							
+							for (var j = 0; j < csvRows[i].length; j++)
+							{
+								objArr[i - 1][csvRows[0][j]] = csvRows[i][j];
+							}
+						}
+						
+						benchmarkObjEnd = new Date();
+						
+						jsonText = JSON.stringify(objArr);
+						localStorage.onePass = jsonText;
+						location.reload();
+						
+						benchmarkJsonEnd = new Date();
+						
+						//f.elements["json"].value = jsonText;
+						
+						benchmarkPopulateEnd = new Date();
+						
+					}
+				}
+				
+				setMessage(message, error);
+			}
+
+			$(function(){
+
+				$('#fileform:file').change(function(event){
+					file = this.files[0];
+					reader = new FileReader();
+					reader.onload = function(event) {
+						$('#filecontents').val(event.target.result);
+						csvToJson('filecontents');
+						populate();
+					}
+					reader.readAsText(file) //readAsdataURL
+					
+				});
+
+				if(typeof(localStorage.onePassPass)!='undefined'){
+					if(localStorage.loggedIn=='true'){
+						$('#loadCSV').show();
+						var timer = setTimeout(function(){populate();},100);
+					}else{
+						$('#goSettings').click();
+						$('#login').show();
+					}
+				}else{
+					$('#goSettings').click();
+					$('#signup').show();
+				}
+
+				$('#gosignup').click(function(){
+					localStorage.loggedIn = 'false';
+					if($('#pass1').val()==$('#pass2').val()){
+						localStorage.onePassPass = $('#pass1').val();
+						localStorage.loggedIn = 'true';
+						location.reload();
+					}else{
+						$('#message').text('Los passwords no coinciden').addClass('error');
+					}					
+				});
+
+				$('#gologin').click(function(){
+					localStorage.loggedIn = 'false';
+					if($('#pass3').val()==localStorage.onePassPass){
+						localStorage.loggedIn = 'true';
+						location.reload();
+					}else{
+						$('#message').text('Password incorrecto').addClass('error');
+					}	
+				});
+
+				$('.deleteall').click(function(){
+					localStorage.removeItem('onePassPass');
+					localStorage.removeItem('loggedIn');
+					localStorage.removeItem('onePass');
+					location.reload();
+				});
+				
+			});
+
+			function logout(){
+				localStorage.loggedIn = 'false';
+				location.reload();
+			}
+
+			function sorteador(){
+				var items = JSON.parse(localStorage.onePass);
+				items.sort(function(a,b){
+					return (a.name + ' ' + a.username).localeCompare((b.name + ' ' + b.username));
+				});
+				return items;
+			}      
+
+			function populate(){
+				if(typeof(localStorage.onePass)!='undefined'){
+					var items = sorteador();
+					$('#autocompleter').html('');
+					for(var i in items){
+						$('#autocompleter').append(
+							$('<li/>').append(
+								//href="#" data-rel="popup" data-position-to="window" data-role="button" data-inline="true" data-transition="pop" data-icon="delete"
+								$('<a/>',{
+									'href':'#popupDialog',
+									'data-rel':"popup",
+									'data-position-to':"window",
+									'data-role':"button",
+									'data-inline':"true",
+									'data-transition':"pop",
+									'data-icon':"delete",
+									'onclick':'javascript:setValues('+i+');'
+								}).append(
+									items[i].name + ' - ' + items[i].username
+								)
+							)
+						);
+					}
+					refresh();
+				}else{
+					$('#goSettings').click();
+					$('#freshPrince').show();
+				}
+			}
+			function refresh(){
+				$('#autocompleter').listview( "refresh" );
+				$('#autocompleter').trigger( "updatelayout");
+			}
+			function setValues(apuntador){
+				var item = sorteador();
+				item = item[apuntador];
+				for(var i in item){
+					if(i=='url'){
+						$('#pass'+i).html('');
+						$('#pass'+i).html(
+							$('<a/>',{'href':item[i]}).append('Go to Url')
+						);
+					}else{
+						$('#pass'+i).html('');
+						$('#pass'+i).html(item[i]);
+					}
+				}
+
+			}
+
+		</script>
+	</head>
+	<body>
+
+		<div data-role="header">
+			<a href="#mypanel" data-role="button" id="goSettings" data-icon="gear" >Settings</a>
+		  <h1>One Password</h1>
+		  <a data-role="button" data-icon="delete" onclick="logout();" >Logout</a>
+		</div>
+
+		<div data-role="panel" id="mypanel">
+		  <div id="message"></div>
+			<form id="convertForm" name="convertForm" onsubmit="return false; ">
+
+				<div id="freshPrince" class="submodulo">
+					<h2>Paso 2 de 2</h2>
+					<h3>Cargar Lista de Passwords</h3>
+					Solo necesitas copiar/pegar tus passwords desde lastPass<br/><br/>
+				</div>
+
+				<div id="loadCSV" class="submodulo">
+					<label for="csv"><acronym title="comma-separated values">Cargar CSV</acronym>:</label>
+					<textarea id="csv" name="csv" rows="10" cols="60" style="height:100px;max-height:100px;"></textarea><br/>
+					<input type="button" value="Cargar CSV" onclick="csvToJson('csv'); " data-theme="b" />
+					<textarea id="filecontents" style="display:none;"></textarea>
+				</div>
+
+				<div id="signup" class="submodulo">
+					<h2>Paso 1 de 2</h2>
+					Bienvenido. Para iniciar, debes crear un password maestro.<br/><br/>
+					<label><strong>Inicia con un password maestro</strong>
+					<input type="password" id="pass1" /></label>
+					<label><strong>Confirma el password maestro</strong>
+					<input type="password" id="pass2" /></label>
+					<br/>
+					<input type="button" data-theme="b" value="Vamos" id="gosignup"/>
+				</div>
+				<div id="login" class="submodulo">
+					<h2>Login</h2>
+					Esta aplicación está bloqueda.<br/><br/>
+					<label><strong>Ingrese su password maestro</strong>
+					<input type="password" id="pass3" /></label>
+					<br/>
+					<input type="button" data-theme="b" value="Vamos" id="gologin"/>
+					<br/><hr/>
+					<input type="button" data-theme="e" value="Borrar Mi Cuenta" class="deleteall"/>
+				</div>
+				<!-- <hr/>
+				<label for="fileform"><acronym title="comma-separated values">CSV como archivo</acronym>:</label><br />
+				<div style="display:none;">
+					<input type="file" id="fileform" name="fileform" />
+				</div>
+				<input type="button" onclick="$('#fileform').click()" value="Buscar" data-theme="e" /> -->
+			</form>
+		</div>
+
+		<div data-role="content">
+			<ul data-role="listview" data-inset="true" data-filter="true" data-filter-placeholder="Buscar por lugar..." id="autocompleter"></ul>
+
+			<div data-role="popup" data-rel="popup" id="popupDialog" data-overlay-theme="a" data-theme="c" data-dismissible="false" style="min-width:200px">
+		    <div class="ui-content">
+					<strong>Nombre:</strong>
+					<div id="passname"></div>
+					<strong>URL:</strong>
+					<div id="passurl"></div>
+					<strong>Username:</strong>
+					<div id="passusername"></div>
+					<strong>Password:</strong>
+					<div id="passpassword"></div>
+					<strong>Notas:</strong>
+					<pre id="passextra"></pre>
+	        <a href="#" data-role="button" data-rel="back" data-theme="b">Cerrar</a>
+		    </div>
+			</div>
+
+		</div>
+
+		
+
+	</body>
+</html>
