@@ -2,7 +2,7 @@
 <widget xmlns = "http://www.w3.org/ns/widgets"
     xmlns:gap = "http://phonegap.com/ns/1.0"
     id        = "com.zerothedragon.onepassword"
-    version   = "0.1.3">
+    version   = "0.1.4">
 
 <name>One Password</name>
 
@@ -11,7 +11,7 @@ Unofficial Last Pass quick access
 </description>
 
 <author href="http://zerothedragon.com" email="zero@zerothedragon.com">
-Hardeep Shoker
+Zero Dragon
 </author>
 
 <preference name="phonegap-version" value="2.3.0" />
